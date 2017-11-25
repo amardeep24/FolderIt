@@ -1,3 +1,18 @@
+/**
+ *    Copyright (C) 2017 Amardeep Bhowmick <amardeep.bhowmick@gmail.com>
+ *
+ *    Licensed under the Apache License, Version 2.0 (the "License");
+ *    you may not use this file except in compliance with the License.
+ *    You may obtain a copy of the License at
+ *
+ *        http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *    Unless required by applicable law or agreed to in writing, software
+ *    distributed under the License is distributed on an "AS IS" BASIS,
+ *    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *    See the License for the specific language governing permissions and
+ *    limitations under the License.
+ */
 package com.amardeep.folderit;
 
 import java.io.File;
@@ -11,6 +26,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import org.zeroturnaround.zip.ZipUtil;
 
 /**
  * @author Amardeep Bhowmick
@@ -37,9 +54,10 @@ public class App
 		System.out.println("OS detected: "+osName+ " Ignoring script file: "+scriptFileName);
 	}
 	/**
+	 * Entry point to the application.
+	 * 
 	 * @param args
 	 * 
-	 * Entry point to the application.
 	 */
     public static void main( String[] args )
     {
@@ -83,6 +101,11 @@ public class App
     		System.out.println(fileListFilteredByName.size());
     		Map<String,File> dirPath=thisApp.createDirectoriesUsingName(directoryInputList, currentDirectory);
     		thisApp.moveFilesUsingName(fileListFilteredByName, dirPath);
+    		if(args[2]!=null && "zip".equalsIgnoreCase(args[2])){
+    			dirPath.forEach((dirName,dir)->{
+    				thisApp.zipIt(dirName,dir,currentDirectory);
+    			});
+    		}
     		
     		
     	}else{
@@ -96,12 +119,13 @@ public class App
     	
     }
     /**
+     * This method creates directories from the mapping file containing the extensions and files.
+     *  
      * @param mapOfFiles
      * @param currentDirectory
      * @return java.util.Map
      * @author Amardeep Bhowmick
      * 
-     * This method creates directories from the mapping file containing the extensions and files.
      */
     private Map<String,File> createDirectoriesUsingType(Map<String,List<String>> mapOfFiles,final String currentDirectory){
     	final Map<String,File> dirPaths=new HashMap<>();
@@ -114,12 +138,13 @@ public class App
     }
     /**
      * 
+     * This method creates directories using the cmd options given.
+     * 
      * @param directoryInputList
      * @param currentDirectory
      * @return java.util.Map
      * @author Amardeep Bhowmick
      * 
-     * This method creates directories using the cmd options given.
      */
     private Map<String,File> createDirectoriesUsingName(List<String> directoryInputList,final String currentDirectory){
     	final Map<String,File> dirPaths=new HashMap<>();
@@ -132,11 +157,12 @@ public class App
     }
     /**
      * 
+     * This method moves the files from the current directory to the directory created by this application.
+     * 
      * @param sourceFiles
      * @param dirPathsCreated
      * @author Amardeep Bhowmick
      * 
-     * This method moves the files from the current directory to the directory created by this application.
      */
     private void moveFiles(final List<File> sourceFiles,Map<String,File> dirPathsCreated){
 		sourceFiles.stream().filter(file -> {
@@ -157,12 +183,12 @@ public class App
     	
     }
     /**
-     * 
+     * This method moves the files to the directories created from the cmd options.
+     *  
      * @param sourceFiles
      * @param dirPathsCreated
      * @author Amardeep Bhowmick
      * 
-     * This method moves the files to the directories created from the cmd options.
      */
     private void moveFilesUsingName(final List<File> sourceFiles,Map<String,File> dirPathsCreated){
     	sourceFiles.stream().filter(file -> {
@@ -188,11 +214,12 @@ public class App
     }
     /**
      * 
+     * This method creates a mapping of file extension with the actual files.
+     *  
      * @param fileNames
      * @return java.util.Map
      * @author Amardeep Bhowmick
      *  
-     * This method creates a mapping of file extension with the actual files.
      */
     private Map<String,List<String>> getFileMapping(Set<String> fileNames){
     	return fileNames.stream()
@@ -206,20 +233,32 @@ public class App
     	}));
     }
     /**
+     * This method matches the keyword in the filename.
+     * 
      * @param directoryInputList
      * @param fileName
      * @return boolean
      * @author Amardeep Bhowmick
      * 
-     * This method matches the keyword in the filename.
      */
     private boolean matchInList(List<String> directoryInputList,String fileName){
     	for(String name:directoryInputList){
     		if(fileName.toLowerCase().contains(name.toLowerCase())){
-    			System.out.println(name+fileName);
     			return true;
     		}
     	}
     	return false;
+    }
+    /**
+     * 
+     * This method zips the directory created
+     * 
+     * @param directory
+     */
+    private void zipIt(String directoryName,File directory,String currentDirectory){
+    	String zipFileName=currentDirectory+File.separator+directoryName+".zip";
+    	System.out.println("Zip file name: "+zipFileName);
+    	ZipUtil.pack(directory, new File(zipFileName));
+    	System.out.println("Zip file created!");
     }
 }
