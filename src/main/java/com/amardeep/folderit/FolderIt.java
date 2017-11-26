@@ -67,7 +67,7 @@ public class FolderIt
     		directoryNames=pattern.split(",");
     		LOGGER.info("Creating directories from cmd arguments if filename is matched in keyword: "+args[1]);
         }else if(args.length>0 && !"p".equalsIgnoreCase(args[0])){
-        	LOGGER.info("Incorrect param usgae, application exiting!");
+        	LOGGER.info("Incorrect param usage, application exiting!");
         	LOGGER.info("Example usage: java -jar folderit-x.x.x p <String,String,..>");
         	System.exit(1);
         }
