@@ -27,6 +27,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.zeroturnaround.zip.ZipUtil;
 
 /**
@@ -35,23 +37,19 @@ import org.zeroturnaround.zip.ZipUtil;
  *This application organizes files in a directory according to their file type into directories.
  *
  */
-public class App 
+public class FolderIt 
 {
-	private final String scriptFileName;
 	private final String jarFileName;
-	private App(){
-		jarFileName=new java.io.File(App.class.getProtectionDomain()
+	static Logger LOGGER = LoggerFactory.getLogger(FolderIt.class);
+	
+	private FolderIt(){
+		jarFileName=new java.io.File(FolderIt.class.getProtectionDomain()
   			  .getCodeSource()
   			  .getLocation()
   			  .getPath())
   			  .getName();
 		String osName=System.getProperty("os.name");
-		if((osName).contains("Windows")){
-    		scriptFileName=jarFileName.substring(0,jarFileName.lastIndexOf("."))+".cmd";
-    	}else{
-    		scriptFileName=jarFileName.substring(0,jarFileName.lastIndexOf("."))+".sh";
-    	}
-		System.out.println("OS detected: "+osName+ " Ignoring script file: "+scriptFileName);
+		LOGGER.info("OS detected: "+osName);
 	}
 	/**
 	 * Entry point to the application.
@@ -64,16 +62,16 @@ public class App
     	String currentDirectory=System.getProperty("user.dir");
     	String pattern="";
     	String[] directoryNames=null;
-    	if( args.length >=2 && args[0].equalsIgnoreCase( "p" )  ) {
+    	if( args.length >=2 && "p".equalsIgnoreCase( args[0] )  ) {
     		pattern=args[1];
     		directoryNames=pattern.split(",");
-    		System.out.println("Creating directories for cmd arguments if filename is available: "+args[1]);
-        }else if(args.length>0 && !args[0].equalsIgnoreCase("p")){
-        	System.out.println("Incorrect params entered, application exiting!");
-        	System.out.println("Example usage: java -jar folderit-x.x.x p <String,String,..>");
+    		LOGGER.info("Creating directories from cmd arguments if filename is matched in keyword: "+args[1]);
+        }else if(args.length>0 && !"p".equalsIgnoreCase(args[0])){
+        	LOGGER.info("Incorrect param usgae, application exiting!");
+        	LOGGER.info("Example usage: java -jar folderit-x.x.x p <String,String,..>");
         	System.exit(1);
         }
-    	App thisApp=new App();
+    	FolderIt folderIt=new FolderIt();
     	File folder = new File(currentDirectory);
     	//Get list of all files
     	List<File> files=new ArrayList<>(Arrays.asList(folder.listFiles()));
@@ -84,36 +82,42 @@ public class App
     			directories.add(file);
     		}
     	}
-    	//Not proceessing directories
+    	//Not processing directories
     	files.removeAll(directories);
     	Set<String> fileNames=null;
     	List<File> fileListFilteredByName=null;
     	//If cmd arguments are present
     	if(directoryNames!=null && directoryNames.length>0){
-    		System.out.println("Creating directories using cmd options...");
+    		LOGGER.info("Creating directories using cmd options...");
     		final List<String> directoryInputList=Arrays.asList(directoryNames);
+    		//Getting list of matched files
     		fileListFilteredByName=files.stream()
     					   .filter(file->{
     						   String fileName=file.getName();
-    						   return thisApp.matchInList(directoryInputList,fileName);
+    						   return folderIt.matchInList(directoryInputList,fileName);
     					   })
     					   .collect(Collectors.toList());
-    		System.out.println(fileListFilteredByName.size());
-    		Map<String,File> dirPath=thisApp.createDirectoriesUsingName(directoryInputList, currentDirectory);
-    		thisApp.moveFilesUsingName(fileListFilteredByName, dirPath);
-    		if(args[2]!=null && "zip".equalsIgnoreCase(args[2])){
+    		LOGGER.info("Files matched: "+fileListFilteredByName.size());
+    		//Exiting if no matching file found
+    		if(fileListFilteredByName!=null && fileListFilteredByName.isEmpty()){
+    			LOGGER.info("No matching files found, application exiting!");
+    			System.exit(1);
+    		}
+    		Map<String,File> dirPath=folderIt.createDirectoriesUsingName(directoryInputList, currentDirectory);
+    		folderIt.moveFilesUsingName(fileListFilteredByName, dirPath);
+    		if(args.length==3 && args[2]!=null && "zip".equalsIgnoreCase(args[2])){
     			dirPath.forEach((dirName,dir)->{
-    				thisApp.zipIt(dirName,dir,currentDirectory);
+    				folderIt.zipIt(dirName,dir,currentDirectory);
     			});
     		}
     		
     		
     	}else{
-    		System.out.println("Creating directories using file types...");
+    		LOGGER.info("Creating directories using file types...");
     		fileNames=files.stream().map(File::getName).collect(Collectors.toSet());
-    		Map<String,List<String>> mapOfFiles = thisApp.getFileMapping(fileNames);
-        	Map<String,File> dirPathsCreated=thisApp.createDirectoriesUsingType(mapOfFiles,currentDirectory);
-        	thisApp.moveFiles(files,dirPathsCreated);
+    		Map<String,List<String>> mapOfFiles = folderIt.getFileMapping(fileNames);
+        	Map<String,File> dirPathsCreated=folderIt.createDirectoriesUsingType(mapOfFiles,currentDirectory);
+        	folderIt.moveFiles(files,dirPathsCreated);
     	}
     	
     	
@@ -130,7 +134,11 @@ public class App
     private Map<String,File> createDirectoriesUsingType(Map<String,List<String>> mapOfFiles,final String currentDirectory){
     	final Map<String,File> dirPaths=new HashMap<>();
     	mapOfFiles.forEach((extn,files)->{
-    		File directory=new File(currentDirectory+File.separator+extn);
+    		String pathToDir=currentDirectory+File.separator+extn;
+    		File directory=new File(pathToDir);
+    		if (Files.exists(directory.toPath())) {
+    			directory.delete();
+    		} 
     		directory.mkdirs();
     		dirPaths.put(extn, directory);
     	});
@@ -149,7 +157,11 @@ public class App
     private Map<String,File> createDirectoriesUsingName(List<String> directoryInputList,final String currentDirectory){
     	final Map<String,File> dirPaths=new HashMap<>();
     	directoryInputList.stream().forEach(dirName->{
-    		File directoryToCreate=new File(currentDirectory+File.separator+dirName);
+    		String pathToDir=currentDirectory+File.separator+dirName;
+    		File directoryToCreate=new File(pathToDir);
+    		if (Files.exists(directoryToCreate.toPath())) {
+    			directoryToCreate.delete();
+    		} 
     		directoryToCreate.mkdir();
     		dirPaths.put(dirName,directoryToCreate);
     	});
@@ -166,8 +178,7 @@ public class App
      */
     private void moveFiles(final List<File> sourceFiles,Map<String,File> dirPathsCreated){
 		sourceFiles.stream().filter(file -> {
-			return !(scriptFileName.equalsIgnoreCase(file.getName())
-					|| jarFileName.equalsIgnoreCase(file.getName()));
+			return !(jarFileName.equalsIgnoreCase(file.getName()));
 		}).forEach(file -> {
 			String extn = file.getName().substring(file.getName().lastIndexOf(".") + 1);
 			File destinationDir = dirPathsCreated.get(extn);
@@ -177,7 +188,7 @@ public class App
 							StandardCopyOption.REPLACE_EXISTING);
 					file.deleteOnExit();
 			} catch (IOException e) {
-				e.printStackTrace();
+				LOGGER.error(e.getMessage());
 			}
 		});
     	
@@ -192,8 +203,7 @@ public class App
      */
     private void moveFilesUsingName(final List<File> sourceFiles,Map<String,File> dirPathsCreated){
     	sourceFiles.stream().filter(file -> {
-			return !(scriptFileName.equalsIgnoreCase(file.getName())
-					|| jarFileName.equalsIgnoreCase(file.getName()));
+			return !(jarFileName.equalsIgnoreCase(file.getName()));
 		}).forEach(file -> {
 			try {
 				File dirToCopy=null;
@@ -208,7 +218,7 @@ public class App
 						StandardCopyOption.REPLACE_EXISTING);
 				file.deleteOnExit();
 		} catch (IOException e) {
-			e.printStackTrace();
+			LOGGER.error(e.getMessage());
 		}
 		});
     }
@@ -224,12 +234,10 @@ public class App
     private Map<String,List<String>> getFileMapping(Set<String> fileNames){
     	return fileNames.stream()
     			.filter(file->{
-    				return !(scriptFileName.equalsIgnoreCase(file)
-    						|| jarFileName.equalsIgnoreCase(file));
+    				return !(jarFileName.equalsIgnoreCase(file));
     			})
-    			.collect(Collectors.groupingBy((name)->{
-    		String fileName=name.toString();
-    		return fileName.substring(fileName.lastIndexOf(".")+1);
+    			.collect(Collectors.groupingBy((fileName)->{
+    		return fileName.substring(fileName.lastIndexOf('.')+1);
     	}));
     }
     /**
@@ -257,8 +265,8 @@ public class App
      */
     private void zipIt(String directoryName,File directory,String currentDirectory){
     	String zipFileName=currentDirectory+File.separator+directoryName+".zip";
-    	System.out.println("Zip file name: "+zipFileName);
+    	LOGGER.info("Zip file name: "+zipFileName);
     	ZipUtil.pack(directory, new File(zipFileName));
-    	System.out.println("Zip file created!");
+    	LOGGER.info("Zip file created!");
     }
 }

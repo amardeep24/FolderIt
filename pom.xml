@@ -7,7 +7,7 @@
 	<version>1.0.0</version>
 	<packaging>jar</packaging>
 
-	<name>folderit</name>
+	<name>Folderit</name>
 	<url>http://maven.apache.org</url>
 
 	<properties>
@@ -28,6 +28,16 @@
 			<version>1.12</version>
 			<type>jar</type>
 		</dependency>
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-api</artifactId>
+			<version>1.7.5</version>
+		</dependency>
+		<dependency>
+			<groupId>ch.qos.logback</groupId>
+			<artifactId>logback-classic</artifactId>
+			<version>1.0.13</version>
+		</dependency>
 	</dependencies>
 	<build>
 		<plugins>
@@ -43,12 +53,14 @@
 				<configuration>
 					<archive>
 						<manifest>
-							<mainClass>com.amardeep.folderit.App</mainClass>
+							<mainClass>com.amardeep.folderit.FolderIt</mainClass>
 						</manifest>
 					</archive>
 					<descriptorRefs>
 						<descriptorRef>jar-with-dependencies</descriptorRef>
 					</descriptorRefs>
+					<finalName>${project.artifactId}-${project.version}</finalName>
+					<appendAssemblyId>false</appendAssemblyId>
 				</configuration>
 			</plugin>
 		</plugins>
