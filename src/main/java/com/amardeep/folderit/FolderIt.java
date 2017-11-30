@@ -26,9 +26,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.zeroturnaround.zip.ZipException;
 import org.zeroturnaround.zip.ZipUtil;
 
 /**
@@ -62,13 +64,26 @@ public class FolderIt
     	String currentDirectory=System.getProperty("user.dir");
     	String pattern="";
     	String[] directoryNames=null;
-    	if( args.length >=2 && "p".equalsIgnoreCase( args[0] )  ) {
+    	List<String> dirAliasNames=new ArrayList<>();
+    	if( args.length >=2 && "-p".equalsIgnoreCase( args[0] )  ) {
     		pattern=args[1];
     		directoryNames=pattern.split(",");
+    		if(args.length>=4 && args[2]!=null && "-a".equalsIgnoreCase(args[2])){
+    			if("zip".equalsIgnoreCase(args[3].toLowerCase())){
+    				LOGGER.info("Incorrect arguments application exiting!");
+    	        	LOGGER.info("Example usage: java -jar folderit-x.x.x -p [String,String,..] -a [String,String] zip");
+    	        	System.exit(1);
+    			}
+    			dirAliasNames=Arrays.asList(args[3].split(","));
+    		}else if(args.length>=4 && args[2]!=null && !"-a".equalsIgnoreCase(args[2])){
+    			LOGGER.info("Incorrect arguments application exiting!");
+	        	LOGGER.info("Example usage: java -jar folderit-x.x.x -p [String,String,..] -a [String,String] zip");
+	        	System.exit(1);
+    		}
     		LOGGER.info("Creating directories from cmd arguments if filename is matched in keyword: "+args[1]);
-        }else if(args.length>0 && !"p".equalsIgnoreCase(args[0])){
-        	LOGGER.info("Incorrect param usage, application exiting!");
-        	LOGGER.info("Example usage: java -jar folderit-x.x.x p <String,String,..>");
+        }else if(args.length>0 && !"-p".equalsIgnoreCase(args[0])){
+        	LOGGER.info("Incorrect arguments application exiting!");
+        	LOGGER.info("Example usage: java -jar folderit-x.x.x -p [String,String,..] -a [String,String] zip");
         	System.exit(1);
         }
     	FolderIt folderIt=new FolderIt();
@@ -103,9 +118,9 @@ public class FolderIt
     			LOGGER.info("No matching files found, application exiting!");
     			System.exit(1);
     		}
-    		Map<String,File> dirPath=folderIt.createDirectoriesUsingName(directoryInputList, currentDirectory);
-    		folderIt.moveFilesUsingName(fileListFilteredByName, dirPath);
-    		if(args.length==3 && args[2]!=null && "zip".equalsIgnoreCase(args[2])){
+    		Map<String,File> dirPath=folderIt.createDirectoriesUsingName(directoryInputList, dirAliasNames,currentDirectory);
+    		folderIt.moveFilesUsingName(fileListFilteredByName,dirAliasNames, dirPath);
+    		if(args[args.length-1]!=null && "zip".equalsIgnoreCase(args[args.length-1])){
     			dirPath.forEach((dirName,dir)->{
     				folderIt.zipIt(dirName,dir,currentDirectory);
     			});
@@ -154,17 +169,32 @@ public class FolderIt
      * @author Amardeep Bhowmick
      * 
      */
-    private Map<String,File> createDirectoriesUsingName(List<String> directoryInputList,final String currentDirectory){
-    	final Map<String,File> dirPaths=new HashMap<>();
-    	directoryInputList.stream().forEach(dirName->{
-    		String pathToDir=currentDirectory+File.separator+dirName;
-    		File directoryToCreate=new File(pathToDir);
-    		if (Files.exists(directoryToCreate.toPath())) {
-    			directoryToCreate.delete();
-    		} 
-    		directoryToCreate.mkdir();
-    		dirPaths.put(dirName,directoryToCreate);
-    	});
+    private Map<String,File> createDirectoriesUsingName(List<String> directoryInputList,List<String> dirAliasNames,final String currentDirectory){
+		final Map<String, File> dirPaths = new HashMap<>();
+		if (dirAliasNames != null && !dirAliasNames.isEmpty()) {
+			IntStream.range(0, directoryInputList.size())
+					 .forEach(idx->{
+						 String dirName=(dirAliasNames.size()-1)>=idx?dirAliasNames.get(idx):directoryInputList.get(idx);
+						 String dirNameActual=directoryInputList.get(idx);
+						 String pathToDir = currentDirectory + File.separator + dirName;
+						 File directoryToCreate = new File(pathToDir);
+							if (Files.exists(directoryToCreate.toPath())) {
+								directoryToCreate.delete();
+							}
+							directoryToCreate.mkdir();
+							dirPaths.put(dirNameActual+":"+dirName, directoryToCreate);
+					 });
+		} else {
+			directoryInputList.stream().forEach(dirName -> {
+				String pathToDir = currentDirectory + File.separator + dirName;
+				File directoryToCreate = new File(pathToDir);
+				if (Files.exists(directoryToCreate.toPath())) {
+					directoryToCreate.delete();
+				}
+				directoryToCreate.mkdir();
+				dirPaths.put(dirName, directoryToCreate);
+			});
+		}
     	return dirPaths;
     }
     /**
@@ -201,25 +231,34 @@ public class FolderIt
      * @author Amardeep Bhowmick
      * 
      */
-    private void moveFilesUsingName(final List<File> sourceFiles,Map<String,File> dirPathsCreated){
-    	sourceFiles.stream().filter(file -> {
-			return !(jarFileName.equalsIgnoreCase(file.getName()));
-		}).forEach(file -> {
-			try {
-				File dirToCopy=null;
-				for(Map.Entry<String,File> entry:dirPathsCreated.entrySet()){
-					if(file.getName().toLowerCase().contains(entry.getKey().toLowerCase())){
-						dirToCopy=entry.getValue();
+    private void moveFilesUsingName(final List<File> sourceFiles,List<String> dirAliasName,Map<String,File> dirPathsCreated){
+    	List<File> listOfDirsToBeCreated=sourceFiles
+    									.stream()
+    									.filter(file -> {
+    										return !(jarFileName.equalsIgnoreCase(file.getName()));
+    									})
+    									.collect(Collectors.toList());
+    	
+    	IntStream.range(0, listOfDirsToBeCreated.size())
+    		.forEach(idx -> {
+    			File file=listOfDirsToBeCreated.get(idx);
+    			File dirToCopy=null;
+				try {
+					for(Map.Entry<String,File> entry:dirPathsCreated.entrySet()){
+						String namesToSearch[]=entry.getKey().toLowerCase().split(":");
+						//System.out.println(namesToSearch.length==2?namesToSearch[1]+"serach "+file.getName().toLowerCase().contains(namesToSearch[1])+file.getName().toLowerCase():namesToSearch[0]+"serach "+file.getName().toLowerCase().contains(namesToSearch[0])+file.getName().toLowerCase());
+						if(file.getName().toLowerCase().contains(namesToSearch[0])){
+							dirToCopy=entry.getValue();
+							
+						}
 					}
-				}
-				
-				Files.copy(file.toPath(),
-						new File(dirToCopy.getAbsolutePath() + File.separator + file.getName()).toPath(),
-						StandardCopyOption.REPLACE_EXISTING);
-				file.deleteOnExit();
-		} catch (IOException e) {
-			LOGGER.error(e.getMessage());
-		}
+					Files.copy(file.toPath(),
+							new File(dirToCopy.getAbsolutePath() + File.separator + file.getName()).toPath(),
+							StandardCopyOption.REPLACE_EXISTING);
+					file.deleteOnExit();
+			} catch (IOException e) {
+				LOGGER.error(e.getMessage());
+			}
 		});
     }
     /**
@@ -264,9 +303,28 @@ public class FolderIt
      * @param directory
      */
     private void zipIt(String directoryName,File directory,String currentDirectory){
-    	String zipFileName=currentDirectory+File.separator+directoryName+".zip";
-    	LOGGER.info("Zip file name: "+zipFileName);
-    	ZipUtil.pack(directory, new File(zipFileName));
-    	LOGGER.info("Zip file created!");
+		try {
+			String names[] = directoryName.split(":");
+			String zipFileName = null;
+			if (names.length == 2) {
+				zipFileName = currentDirectory + File.separator + names[1] + ".zip";
+				File zipFile = new File(zipFileName);
+				if (Files.exists(zipFile.toPath())) {
+					zipFile.delete();
+				}
+			} else {
+				zipFileName = currentDirectory + File.separator + names[0] + ".zip";
+				File zipFile = new File(zipFileName);
+				if (Files.exists(zipFile.toPath())) {
+					zipFile.delete();
+				}
+			}
+			LOGGER.info("Zip file name: " + zipFileName);
+			ZipUtil.pack(directory, new File(zipFileName));
+			LOGGER.info("Zip file created!");
+		}catch(ZipException ze){
+			LOGGER.error("Error creating zip file!");
+			System.exit(1);
+    	}
     }
 }
